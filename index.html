@@ -3,144 +3,210 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tevekkül Alanı – Demo</title>
+<title>Anonymous Chat</title>
 
 <style>
+* { box-sizing: border-box; }
+
 body {
   margin: 0;
-  background: radial-gradient(circle at top, #020617, #000);
-  color: #e5e7eb;
-  font-family: Georgia, serif;
+  background: #050505;
+  color: #9ca3af;
+  font-family: "Courier New", monospace;
   overflow: hidden;
 }
 
-#online {
+/* HEADER */
+#top {
   position: fixed;
-  top: 10px;
-  right: 15px;
-  font-size: 13px;
-  opacity: 0.7;
-}
-
-#chat-bubbles {
-  position: fixed;
-  bottom: 90px;
-  right: 15px;
-  width: 80vw;
-  max-width: 320px;
-}
-
-.bubble {
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.1);
-  backdrop-filter: blur(6px);
-  padding: 12px;
-  border-radius: 14px;
-  margin-top: 12px;
-  font-size: 14px;
-  animation: floatUp 14s linear forwards;
-}
-
-@keyframes floatUp {
-  from { opacity: 0; transform: translateY(40px); }
-  to   { opacity: 1; transform: translateY(-240px); }
-}
-
-.chat-box {
-  position: fixed;
-  bottom: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 95%;
-  max-width: 400px;
+  top: 0;
+  width: 100%;
+  height: 45px;
+  background: #000;
+  border-bottom: 1px solid #111;
   display: flex;
-  gap: 6px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 15px;
+  font-size: 13px;
 }
 
-.chat-box input {
+#online {
+  color: #6b7280;
+}
+
+/* CHAT AREA */
+#chat {
+  position: fixed;
+  top: 45px;
+  bottom: 65px;
+  width: 100%;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+/* MESSAGE */
+.msg {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+  animation: fadeIn 0.3s ease;
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(145deg, #111, #000);
+  border: 1px solid #222;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.content {
+  max-width: 80%;
+}
+
+.name {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.text {
+  font-size: 14px;
+  color: #d1d5db;
+  line-height: 1.4;
+  word-wrap: break-word;
+}
+
+/* INPUT */
+#inputBox {
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  height: 65px;
+  background: #000;
+  border-top: 1px solid #111;
+  display: flex;
+  padding: 10px;
+  gap: 10px;
+}
+
+#message {
   flex: 1;
-  padding: 11px;
-  border-radius: 12px;
-  border: none;
+  background: #050505;
+  border: 1px solid #222;
+  color: #e5e7eb;
+  padding: 10px;
+  font-family: inherit;
+  font-size: 14px;
   outline: none;
-  background: rgba(255,255,255,0.1);
-  color: white;
 }
 
-.chat-box button {
-  padding: 11px 16px;
-  border-radius: 12px;
-  border: none;
-  background: #22c55e;
-  color: #000;
-  font-weight: bold;
+button {
+  background: #111;
+  border: 1px solid #333;
+  color: #9ca3af;
+  padding: 0 16px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #1a1a1a;
+}
+
+/* ANIM */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* MOBILE */
+@media (max-width: 600px) {
+  .content { max-width: 70%; }
 }
 </style>
 </head>
 
 <body>
 
-<div id="online">👁️ Online: 1</div>
-<div id="chat-bubbles"></div>
+<div id="top">
+  <div>anonymous://chat</div>
+  <div id="online">online: 1</div>
+</div>
 
-<div class="chat-box">
-  <input id="message" placeholder="Bir şey yaz...">
-  <button onclick="sendMessage()">Gönder</button>
+<div id="chat"></div>
+
+<div id="inputBox">
+  <input id="message" placeholder="type message..." autocomplete="off">
+  <button onclick="send()">send</button>
 </div>
 
 <script>
-// 🚫 Küfür filtresi
+// 🔐 Rastgele hacker nick
+const names = ["root","ghost","null","cipher","shadow","zero","proxy","void"];
+const user =
+  names[Math.floor(Math.random()*names.length)] +
+  "#" + Math.floor(Math.random()*900 + 100);
+
+// 👁️ Online (simülasyon – backend gelince gerçek olur)
+let online = Math.floor(Math.random()*6)+3;
+document.getElementById("online").innerText = "online: " + online;
+
+// 🚫 Küfür filtresi (basic)
 const badWords = ["salak","aptal","küfür"];
-function clean(text) {
-  badWords.forEach(w => {
-    text = text.replace(new RegExp(w,"gi"), "***");
+function clean(t){
+  badWords.forEach(w=>{
+    t = t.replace(new RegExp(w,"gi"), "***");
   });
-  return text;
+  return t;
 }
 
-// 🕊️ Mesaj balonu oluştur
-function addBubble(text, isQuote=false) {
-  const div = document.createElement("div");
-  div.className = "bubble";
-  div.innerHTML = isQuote ? "🕊️ " + text : text;
+// 💬 Mesaj ekle
+function addMessage(name, text) {
+  const msg = document.createElement("div");
+  msg.className = "msg";
 
-  document.getElementById("chat-bubbles").appendChild(div);
+  msg.innerHTML = `
+    <div class="avatar">☠</div>
+    <div class="content">
+      <div class="name">${name}</div>
+      <div class="text">${text}</div>
+    </div>
+  `;
 
-  setTimeout(() => div.remove(), 30000);
+  document.getElementById("chat").appendChild(msg);
+  document.getElementById("chat").scrollTop =
+    document.getElementById("chat").scrollHeight;
 }
 
-// 📤 Mesaj gönder
-function sendMessage() {
+// 📤 Gönder
+function send() {
   const input = document.getElementById("message");
   if (!input.value.trim()) return;
 
-  addBubble(clean(input.value));
+  addMessage(user, clean(input.value));
   input.value = "";
 }
 
-// 🕌 Otomatik tevekkül sözleri
-const quotes = [
-  "Tevekkül, sonucu Allah’a bırakmaktır.",
-  "Kalp, teslim olunca hafifler.",
-  "Olan hayırdır, bilmesen de.",
-  "Sabır, vaktin içindeki rahmettir.",
-  "Yükünü bırak, yoluna bak."
-];
+// Enter ile gönder
+document.getElementById("message")
+  .addEventListener("keydown", e => {
+    if (e.key === "Enter") send();
+  });
 
-setInterval(() => {
-  const q = quotes[Math.floor(Math.random() * quotes.length)];
-  addBubble(q, true);
-}, 45000);
-
-// 👁️ Online kişi simülasyonu
-let online = Math.floor(Math.random() * 5) + 1;
-document.getElementById("online").innerText = "👁️ Online: " + online;
-
-setInterval(() => {
-  online += Math.random() > 0.5 ? 1 : -1;
-  if (online < 1) online = 1;
-  if (online > 12) online = 12;
-  document.getElementById("online").innerText = "👁️ Online: " + online;
+// 🤖 Fake trafik (boş durmasın diye – istersen kaldır)
+setInterval(()=>{
+  if (Math.random() > 0.7) {
+    addMessage(
+      names[Math.floor(Math.random()*names.length)] + "#" + Math.floor(Math.random()*999),
+      "connected..."
+    );
+  }
 }, 8000);
 </script>
 

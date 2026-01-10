@@ -2,87 +2,172 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>Anon Chat</title>
+<title>anonymous://chat</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
-body{margin:0;background:#0a0a0a;color:#fff;font-family:monospace}
-#chat{height:calc(100vh - 70px);overflow:auto;padding:10px}
-.msg{margin-bottom:8px}
-.name{color:#888;font-size:12px}
-#input{height:70px;display:flex;gap:10px;padding:10px;border-top:1px solid #222}
-input{flex:1;background:#000;border:1px solid #333;color:#fff;padding:10px}
-button{background:#111;border:1px solid #333;color:#fff;padding:0 15px}
+body {
+  margin: 0;
+  background: #050505;
+  color: #ccc;
+  font-family: monospace;
+}
+
+#top {
+  height: 45px;
+  background: #000;
+  border-bottom: 1px solid #111;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+}
+
+#chat {
+  height: calc(100vh - 90px);
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.msg {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #111;
+  border: 1px solid #222;
+}
+
+.user {
+  color: #6cf;
+}
+
+#input {
+  height: 45px;
+  border-top: 1px solid #111;
+  display: flex;
+}
+
+#input input {
+  flex: 1;
+  background: #000;
+  border: none;
+  color: #fff;
+  padding: 10px;
+  font-family: monospace;
+}
+
+#input button {
+  width: 80px;
+  background: #000;
+  color: #6cf;
+  border: 1px solid #111;
+}
 </style>
 </head>
 
 <body>
 
+<div id="top">
+  <span>anonymous://chat</span>
+  <span id="admin">ADMIN</span>
+</div>
+
 <div id="chat"></div>
 
 <div id="input">
   <input id="msg" placeholder="mesaj yaz">
-  <button onclick="send()">Gönder</button>
+  <button onclick="send()">send</button>
 </div>
 
 <script>
-/* ==== SUPABASE ==== */
-const SUPABASE_URL = "https://dhwqtanvouvonspqwawm.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRod3F0YW52b3V2b25zcHF3YXdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwNTk2MDEsImV4cCI6MjA4MzYzNTYwMX0.DHJ9Grc75evWPhNVFmT_xOnEDKK4ssKjW1TWVtPnBKI";
-
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-/* ==== USER ==== */
-const names=["root","ghost","null","cipher","shadow","void"];
-const username = names[Math.floor(Math.random()*names.length)]+"#"+Math.floor(Math.random()*900+100);
-
-/* ==== DRAW ==== */
-function draw(u,t){
-  const d=document.createElement("div");
-  d.className="msg";
-  d.innerHTML=`<div class="name">${u}</div><div>${t}</div>`;
-  chat.appendChild(d);
-  chat.scrollTop=chat.scrollHeight;
+// 🔐 ANON KULLANICI
+function getUser() {
+  let u = localStorage.getItem("anon");
+  if (!u) {
+    u = {
+      name: "anonim#" + Math.floor(1000 + Math.random() * 9000),
+      avatar: Math.floor(Math.random() * 6),
+      uid: crypto.randomUUID()
+    };
+    localStorage.setItem("anon", JSON.stringify(u));
+  }
+  return JSON.parse(localStorage.getItem("anon"));
 }
+const user = getUser();
 
-/* ==== LOAD ==== */
-async function load(){
-  const {data,error} = await sb
+// 🔗 SUPABASE
+const supabase = supabase.createClient(
+  "https://PROJECT_ID.supabase.co",
+  "PUBLIC_ANON_KEY"
+);
+
+// 📥 MESAJ ÇEK
+async function load() {
+  const { data } = await supabase
     .from("messages")
-    .select("username,text")
-    .order("id");
+    .select("*")
+    .order("id", { ascending: true });
 
-  if(error){alert(error.message);return;}
-
-  chat.innerHTML="";
-  data.forEach(m=>draw(m.username,m.text));
+  data.forEach(addMsg);
 }
-
-/* ==== SEND ==== */
-async function send(){
-  const v=msg.value.trim();
-  if(!v) return;
-
-  const {error} = await sb
-    .from("messages")
-    .insert({username:username,text:v});
-
-  if(error){alert(error.message);return;}
-
-  msg.value="";
-}
-
-/* ==== REALTIME ==== */
-sb.channel("chat")
-.on("postgres_changes",
-{event:"INSERT",schema:"public",table:"messages"},
-p=>draw(p.new.username,p.new.text)
-)
-.subscribe();
-
 load();
+
+// 📡 REALTIME
+supabase
+  .channel("chat")
+  .on("postgres_changes", {
+    event: "INSERT",
+    schema: "public",
+    table: "messages"
+  }, payload => {
+    addMsg(payload.new);
+  })
+  .subscribe();
+
+// ➕ MESAJ GÖSTER
+function addMsg(m) {
+  const div = document.createElement("div");
+  div.className = "msg";
+  div.innerHTML = `
+    <div class="avatar"></div>
+    <div>
+      <div class="user">${m.username}</div>
+      <div>${escape(m.text)}</div>
+    </div>
+  `;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+// 🚀 GÖNDER
+async function send() {
+  const text = msg.value.trim();
+  if (!text) return;
+
+  await supabase.from("messages").insert({
+    username: user.name,
+    avatar: user.avatar,
+    uid: user.uid,
+    text
+  });
+
+  msg.value = "";
+}
+
+// 🛡️ XSS
+function escape(str) {
+  return str.replace(/[&<>"']/g, m =>
+    ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m])
+  );
+}
 </script>
 
 </body>

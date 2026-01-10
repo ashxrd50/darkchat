@@ -2,122 +2,236 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>Anon Chat</title>
+<title>anonymous://chat</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <style>
-body{margin:0;background:#050505;color:#fff;font-family:monospace}
-#chat{height:70vh;overflow:auto;padding:10px}
-.msg{margin-bottom:8px}
-.name{color:#6b7280;font-size:11px}
-#input{display:flex;gap:5px;padding:10px}
-input{flex:1;background:#000;color:#fff;border:1px solid #333;padding:8px}
-button{background:#111;color:#fff;border:1px solid #333;padding:8px}
-#adminPanel{position:fixed;top:10%;left:50%;transform:translateX(-50%);
-background:#000;border:1px solid #333;padding:15px;display:none}
+:root{
+  --bg:#050505;
+  --panel:#0b0b0b;
+  --border:#1f1f1f;
+  --text:#e5e7eb;
+  --muted:#6b7280;
+  --accent:#22c55e;
+  --danger:#ef4444;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:monospace;
+}
+#top{
+  height:50px;
+  background:#000;
+  border-bottom:1px solid var(--border);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 15px;
+}
+#chat{
+  height:calc(100vh - 120px);
+  overflow:auto;
+  padding:15px;
+}
+.msg{
+  margin-bottom:12px;
+}
+.name{
+  font-size:11px;
+  color:var(--muted);
+}
+.text{
+  padding:6px 8px;
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:4px;
+}
+#input{
+  height:70px;
+  display:flex;
+  gap:10px;
+  padding:10px;
+  border-top:1px solid var(--border);
+}
+input{
+  flex:1;
+  background:#000;
+  border:1px solid var(--border);
+  color:var(--text);
+  padding:10px;
+}
+button{
+  background:#000;
+  border:1px solid var(--border);
+  color:var(--text);
+  padding:0 14px;
+  cursor:pointer;
+}
+button:hover{background:#111}
+#adminPanel{
+  position:fixed;
+  top:50%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  background:#000;
+  border:1px solid var(--border);
+  padding:20px;
+  display:none;
+  width:260px;
+}
+#adminPanel h3{
+  margin-top:0;
+}
+.admin-btn{
+  width:100%;
+  margin-bottom:8px;
+}
+.badge{
+  color:var(--accent);
+}
 </style>
 </head>
+
 <body>
+
+<div id="top">
+  <div>anonymous://chat</div>
+  <div id="adminBtn" style="cursor:pointer">⚙️</div>
+</div>
 
 <div id="chat"></div>
 
 <div id="input">
-  <input id="msg" placeholder="mesaj / admin komutu">
-  <button onclick="send()">Send</button>
-  <button onclick="adminPanel.style.display='block'">⚙️</button>
+  <input id="msg" placeholder="mesaj yaz veya /komut">
+  <button onclick="send()">send</button>
 </div>
 
 <div id="adminPanel">
-  <h3>ADMIN</h3>
-  <button onclick="clearChat()">🧹 Clear Chat</button><br><br>
-  <button onclick="adminPanel.style.display='none'">Kapat</button>
+  <h3>ADMIN PANEL</h3>
+  <button class="admin-btn" onclick="clearChat()">🧹 Tüm mesajları sil</button>
+  <button class="admin-btn" onclick="toggleSlow()">🐢 Slow Mode</button>
+  <button class="admin-btn" onclick="toggleAuto()">⏱️ Oto silme</button>
+  <button class="admin-btn" onclick="adminPanel.style.display='none'">Kapat</button>
 </div>
 
 <script>
+/* ===== SUPABASE ===== */
 const sb = supabase.createClient(
   "https://dhwqtanvouvonspqwawm.supabase.co",
   "ANON_KEY"
 );
 
-let lastSend=0;
+/* ===== USER ===== */
+const names=["root","ghost","null","cipher","shadow","void"];
+const username = names[Math.floor(Math.random()*names.length)]+"#"+Math.floor(Math.random()*900+100);
 const room="global";
-const user="anon#"+Math.floor(Math.random()*999);
 
+/* ===== STATE ===== */
+let lastSend=0;
+let slowMode=true;
+let autoDelete=true;
+let isAdmin=false;
+
+/* ===== DRAW ===== */
 function draw(m){
-  chat.innerHTML+=`
-  <div class="msg">
-    <div class="name">${m.name} | #${m.id}</div>
-    <div>${m.text}</div>
-  </div>`;
-  chat.scrollTop=99999;
+  const d=document.createElement("div");
+  d.className="msg";
+  d.innerHTML=`
+    <div class="name">
+      ${m.name} · #${m.id}
+      ${isAdmin?`<span onclick="del(${m.id})" style="color:red;cursor:pointer"> ✖</span>`:""}
+    </div>
+    <div class="text">${m.text}</div>
+  `;
+  chat.appendChild(d);
+  chat.scrollTop=chat.scrollHeight;
 }
 
+/* ===== LOAD ===== */
 async function load(){
-  const {data}=await sb.from("messages").select("*").order("id");
+  const {data}=await sb
+    .from("messages")
+    .select("*")
+    .eq("room",room)
+    .order("id");
   chat.innerHTML="";
   data.forEach(draw);
 }
 
-async function isBanned(){
-  const {data}=await sb.from("bans").select("*").eq("name",user)
-    .gt("expires_at",new Date());
-  return data.length>0;
-}
-
+/* ===== SEND ===== */
 async function send(){
-  if(Date.now()-lastSend<2000) return alert("Flood");
-  lastSend=Date.now();
-
-  if(await isBanned()) return alert("Banned");
-
   const v=msg.value.trim();
   if(!v) return;
 
-  // ADMIN KOMUT
-  if(v.startsWith("/")){
-    const p=v.split(" ");
-    if(p[0]==="/ban"){
-      adminCall("ban",{name:p[1],minutes:+p[2],reason:"admin"});
-    }
-    if(p[0]==="/delete"){
-      adminCall("delete",{id:+p[1]});
-    }
-    if(p[0]==="/clear"){
-      adminCall("clear",{});
-    }
-    msg.value="";
-    return;
-  }
+  if(slowMode && Date.now()-lastSend<2000)
+    return alert("Yavaşla");
+
+  lastSend=Date.now();
 
   await sb.from("messages").insert({
-    room,name:user,text:v
+    room,
+    name:username,
+    text:v
   });
+
   msg.value="";
 }
 
+/* ===== REALTIME ===== */
 sb.channel("chat")
 .on("postgres_changes",
   {event:"INSERT",schema:"public",table:"messages"},
   p=>draw(p.new)
-).subscribe();
+)
+.subscribe();
 
-async function adminCall(action,data){
-  const session=(await sb.auth.getSession()).data.session;
-  if(!session) return alert("Admin login yok");
+/* ===== ADMIN ===== */
+adminBtn.onclick=()=>{
+  const p=prompt("Admin şifre:");
+  if(p==="12345"){
+    isAdmin=true;
+    adminPanel.style.display="block";
+  }
+};
 
-  await fetch("/functions/v1/admin",{
-    method:"POST",
-    headers:{
-      Authorization:"Bearer "+session.access_token
-    },
-    body:JSON.stringify({action,data})
-  });
+async function del(id){
+  if(!isAdmin) return;
+  await sb.from("messages").delete().eq("id",id);
+  load();
 }
 
 async function clearChat(){
-  adminCall("clear",{});
+  if(!isAdmin) return;
+  await sb.from("messages").delete().neq("id",0);
+  load();
 }
 
+function toggleSlow(){
+  slowMode=!slowMode;
+  alert("Slow mode: "+slowMode);
+}
+
+function toggleAuto(){
+  autoDelete=!autoDelete;
+  alert("Oto silme: "+autoDelete);
+}
+
+/* ===== AUTO DELETE ===== */
+setInterval(async()=>{
+  if(!autoDelete) return;
+  await sb
+    .from("messages")
+    .delete()
+    .lt("created_at", new Date(Date.now()-10*60*1000).toISOString());
+},60000);
+
+/* ===== INIT ===== */
 load();
 </script>
+
 </body>
 </html>

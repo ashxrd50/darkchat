@@ -3,121 +3,58 @@
 <head>
 <meta charset="UTF-8">
 <title>Anon Chat</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
 <style>
 body{margin:0;background:#050505;color:#fff;font-family:monospace}
-#top{height:45px;background:#000;border-bottom:1px solid #111;display:flex;justify-content:space-between;align-items:center;padding:0 15px}
-#chat{height:calc(100vh - 110px);overflow:auto;padding:10px}
-.msg{margin-bottom:10px}
-.name{color:#6b7280;font-size:12px}
-#input{height:65px;display:flex;gap:10px;padding:10px;border-top:1px solid #111}
-input{flex:1;background:#000;border:1px solid #222;color:#fff;padding:10px}
-button{background:#111;border:1px solid #333;color:#9ca3af;padding:0 15px;cursor:pointer}
+#chat{height:80vh;overflow:auto;padding:10px}
+input,button{background:#000;color:#fff;border:1px solid #333;padding:10px}
 </style>
 </head>
-
 <body>
 
-<div id="top">
-  <div>anonymous://chat</div>
-  <div id="admin">ADMIN</div>
-</div>
-
 <div id="chat"></div>
-
-<div id="input">
-  <input id="msg" placeholder="mesaj yaz" autocomplete="off">
-  <button onclick="send()">send</button>
-</div>
+<input id="msg" placeholder="mesaj yaz">
+<button onclick="send()">send</button>
 
 <script>
-/* ===== SUPABASE ===== */
-const SUPABASE_URL = "https://dhwqtanvouvonspqwawm.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRod3F0YW52b3V2b25zcHF3YXdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwNTk2MDEsImV4cCI6MjA4MzYzNTYwMX0.DHJ9Grc75evWPhNVFmT_xOnEDKK4ssKjW1TWVtPnBKI";
+const sb = supabase.createClient(
+  "https://dhwqtanvouvonspqwawm.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRod3F0YW52b3V2b25zcHF3YXdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwNTk2MDEsImV4cCI6MjA4MzYzNTYwMX0.DHJ9Grc75evWPhNVFmT_xOnEDKK4ssKjW1TWVtPnBKI"
+);
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const user = "anon#" + Math.floor(Math.random()*999);
 
-/* ===== USER ===== */
-const names=["root","ghost","null","cipher","shadow","void"];
-const username =
-  names[Math.floor(Math.random()*names.length)] +
-  "#" +
-  Math.floor(Math.random()*900+100);
-
-const room = "global";
-const chat = document.getElementById("chat");
-
-/* ===== DRAW ===== */
-function draw(u,t){
-  const d=document.createElement("div");
-  d.className="msg";
-  d.innerHTML=`<div class="name">${u}</div><div>${t}</div>`;
-  chat.appendChild(d);
-  chat.scrollTop=chat.scrollHeight;
+function draw(n,t){
+  chat.innerHTML += `<div><b>${n}</b>: ${t}</div>`;
 }
 
-/* ===== LOAD ===== */
 async function load(){
-  const { data, error } = await sb
-    .from("messages")
-    .select("*")
-    .eq("room", room)
-    .order("id");
-
-  if(error){
-    alert(error.message);
-    console.error(error);
-    return;
-  }
-
+  const {data} = await sb.from("messages").select("*").order("id");
   chat.innerHTML="";
-  data.forEach(m => draw(m.name, m.text));
+  data.forEach(m=>draw(m.name,m.text));
 }
 
-/* ===== SEND ===== */
 async function send(){
-  const i=document.getElementById("msg");
-  if(!i.value.trim()) return;
+  const v = msg.value.trim();
+  if(!v) return;
 
-  const { error } = await sb.from("messages").insert({
-    room: room,
-    name: username,
-    text: i.value
+  const {error} = await sb.from("messages").insert({
+    name: user,
+    text: v
   });
 
-  if(error){
-    alert(error.message);
-    console.error(error);
-  }
-
-  i.value="";
+  if(error) alert(error.message);
+  msg.value="";
 }
 
-/* ===== REALTIME ===== */
-sb.channel("chat")
-  .on(
-    "postgres_changes",
-    { event:"INSERT", schema:"public", table:"messages" },
-    payload => {
-      if(payload.new.room === room){
-        draw(payload.new.name, payload.new.text);
-      }
-    }
-  )
-  .subscribe();
+sb.channel("c")
+.on("postgres_changes",
+  {event:"INSERT",schema:"public",table:"messages"},
+  p=>draw(p.new.name,p.new.text)
+)
+.subscribe();
 
-/* ===== ADMIN ===== */
-admin.onclick = () => {
-  const p = prompt("Admin şifre:");
-  if(p === "12345") alert("Admin giriş başarılı");
-};
-
-/* ===== INIT ===== */
 load();
 </script>
-
 </body>
 </html>

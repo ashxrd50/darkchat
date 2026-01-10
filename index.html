@@ -6,53 +6,116 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 body{margin:0;background:#050505;color:#fff;font-family:monospace}
-#chat{height:80vh;overflow:auto;padding:10px}
-input,button{background:#000;color:#fff;border:1px solid #333;padding:10px}
+#chat{height:70vh;overflow:auto;padding:10px}
+.msg{margin-bottom:8px}
+.name{color:#6b7280;font-size:11px}
+#input{display:flex;gap:5px;padding:10px}
+input{flex:1;background:#000;color:#fff;border:1px solid #333;padding:8px}
+button{background:#111;color:#fff;border:1px solid #333;padding:8px}
+#adminPanel{position:fixed;top:10%;left:50%;transform:translateX(-50%);
+background:#000;border:1px solid #333;padding:15px;display:none}
 </style>
 </head>
 <body>
 
 <div id="chat"></div>
-<input id="msg" placeholder="mesaj yaz">
-<button onclick="send()">send</button>
+
+<div id="input">
+  <input id="msg" placeholder="mesaj / admin komutu">
+  <button onclick="send()">Send</button>
+  <button onclick="adminPanel.style.display='block'">⚙️</button>
+</div>
+
+<div id="adminPanel">
+  <h3>ADMIN</h3>
+  <button onclick="clearChat()">🧹 Clear Chat</button><br><br>
+  <button onclick="adminPanel.style.display='none'">Kapat</button>
+</div>
 
 <script>
 const sb = supabase.createClient(
   "https://dhwqtanvouvonspqwawm.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRod3F0YW52b3V2b25zcHF3YXdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwNTk2MDEsImV4cCI6MjA4MzYzNTYwMX0.DHJ9Grc75evWPhNVFmT_xOnEDKK4ssKjW1TWVtPnBKI"
+  "ANON_KEY"
 );
 
-const user = "anon#" + Math.floor(Math.random()*999);
+let lastSend=0;
+const room="global";
+const user="anon#"+Math.floor(Math.random()*999);
 
-function draw(n,t){
-  chat.innerHTML += `<div><b>${n}</b>: ${t}</div>`;
+function draw(m){
+  chat.innerHTML+=`
+  <div class="msg">
+    <div class="name">${m.name} | #${m.id}</div>
+    <div>${m.text}</div>
+  </div>`;
+  chat.scrollTop=99999;
 }
 
 async function load(){
-  const {data} = await sb.from("messages").select("*").order("id");
+  const {data}=await sb.from("messages").select("*").order("id");
   chat.innerHTML="";
-  data.forEach(m=>draw(m.name,m.text));
+  data.forEach(draw);
+}
+
+async function isBanned(){
+  const {data}=await sb.from("bans").select("*").eq("name",user)
+    .gt("expires_at",new Date());
+  return data.length>0;
 }
 
 async function send(){
-  const v = msg.value.trim();
+  if(Date.now()-lastSend<2000) return alert("Flood");
+  lastSend=Date.now();
+
+  if(await isBanned()) return alert("Banned");
+
+  const v=msg.value.trim();
   if(!v) return;
 
-  const {error} = await sb.from("messages").insert({
-    name: user,
-    text: v
-  });
+  // ADMIN KOMUT
+  if(v.startsWith("/")){
+    const p=v.split(" ");
+    if(p[0]==="/ban"){
+      adminCall("ban",{name:p[1],minutes:+p[2],reason:"admin"});
+    }
+    if(p[0]==="/delete"){
+      adminCall("delete",{id:+p[1]});
+    }
+    if(p[0]==="/clear"){
+      adminCall("clear",{});
+    }
+    msg.value="";
+    return;
+  }
 
-  if(error) alert(error.message);
+  await sb.from("messages").insert({
+    room,name:user,text:v
+  });
   msg.value="";
 }
 
-sb.channel("c")
+sb.channel("chat")
 .on("postgres_changes",
   {event:"INSERT",schema:"public",table:"messages"},
-  p=>draw(p.new.name,p.new.text)
-)
-.subscribe();
+  p=>draw(p.new)
+).subscribe();
+
+async function adminCall(action,data){
+  const session=(await sb.auth.getSession()).data.session;
+  if(!session) return alert("Admin login yok");
+
+  await fetch("/functions/v1/admin",{
+    method:"POST",
+    headers:{
+      Authorization:"Bearer "+session.access_token
+    },
+    body:JSON.stringify({action,data})
+  });
+}
+
+async function clearChat(){
+  adminCall("clear",{});
+}
 
 load();
 </script>

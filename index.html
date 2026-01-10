@@ -13,86 +13,30 @@
   --border:#1f1f1f;
   --text:#e5e7eb;
   --muted:#6b7280;
-  --accent:#22c55e;
   --danger:#ef4444;
 }
 *{box-sizing:border-box}
-body{
-  margin:0;
-  background:var(--bg);
-  color:var(--text);
-  font-family:monospace;
-}
+body{margin:0;background:var(--bg);color:var(--text);font-family:monospace}
 #top{
-  height:50px;
-  background:#000;
-  border-bottom:1px solid var(--border);
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding:0 15px;
+  height:50px;background:#000;border-bottom:1px solid var(--border);
+  display:flex;justify-content:space-between;align-items:center;padding:0 15px
 }
-#chat{
-  height:calc(100vh - 120px);
-  overflow:auto;
-  padding:15px;
-}
-.msg{
-  margin-bottom:12px;
-}
-.name{
-  font-size:11px;
-  color:var(--muted);
-}
-.text{
-  padding:6px 8px;
-  background:var(--panel);
-  border:1px solid var(--border);
-  border-radius:4px;
-}
+#chat{height:calc(100vh - 120px);overflow:auto;padding:15px}
+.msg{margin-bottom:12px}
+.name{font-size:11px;color:var(--muted)}
+.text{padding:6px 8px;background:var(--panel);border:1px solid var(--border);border-radius:4px}
 #input{
-  height:70px;
-  display:flex;
-  gap:10px;
-  padding:10px;
-  border-top:1px solid var(--border);
+  height:70px;display:flex;gap:10px;padding:10px;border-top:1px solid var(--border)
 }
-input{
-  flex:1;
-  background:#000;
-  border:1px solid var(--border);
-  color:var(--text);
-  padding:10px;
-}
-button{
-  background:#000;
-  border:1px solid var(--border);
-  color:var(--text);
-  padding:0 14px;
-  cursor:pointer;
-}
+input{flex:1;background:#000;border:1px solid var(--border);color:var(--text);padding:10px}
+button{background:#000;border:1px solid var(--border);color:var(--text);padding:0 14px;cursor:pointer}
 button:hover{background:#111}
 #adminPanel{
-  position:fixed;
-  top:50%;
-  left:50%;
-  transform:translate(-50%,-50%);
-  background:#000;
-  border:1px solid var(--border);
-  padding:20px;
-  display:none;
-  width:260px;
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  background:#000;border:1px solid var(--border);padding:20px;display:none;width:260px
 }
-#adminPanel h3{
-  margin-top:0;
-}
-.admin-btn{
-  width:100%;
-  margin-bottom:8px;
-}
-.badge{
-  color:var(--accent);
-}
+.admin-btn{width:100%;margin-bottom:8px}
+.del{color:var(--danger);cursor:pointer}
 </style>
 </head>
 
@@ -106,15 +50,13 @@ button:hover{background:#111}
 <div id="chat"></div>
 
 <div id="input">
-  <input id="msg" placeholder="mesaj yaz veya /komut">
+  <input id="msg" placeholder="mesaj yaz">
   <button onclick="send()">send</button>
 </div>
 
 <div id="adminPanel">
-  <h3>ADMIN PANEL</h3>
+  <h3>ADMIN</h3>
   <button class="admin-btn" onclick="clearChat()">🧹 Tüm mesajları sil</button>
-  <button class="admin-btn" onclick="toggleSlow()">🐢 Slow Mode</button>
-  <button class="admin-btn" onclick="toggleAuto()">⏱️ Oto silme</button>
   <button class="admin-btn" onclick="adminPanel.style.display='none'">Kapat</button>
 </div>
 
@@ -127,23 +69,22 @@ const sb = supabase.createClient(
 
 /* ===== USER ===== */
 const names=["root","ghost","null","cipher","shadow","void"];
-const username = names[Math.floor(Math.random()*names.length)]+"#"+Math.floor(Math.random()*900+100);
+const username=names[Math.floor(Math.random()*names.length)]+"#"+Math.floor(Math.random()*900+100);
 const room="global";
 
 /* ===== STATE ===== */
 let lastSend=0;
-let slowMode=true;
-let autoDelete=true;
 let isAdmin=false;
 
 /* ===== DRAW ===== */
 function draw(m){
   const d=document.createElement("div");
   d.className="msg";
+  d.id="m"+m.id;
   d.innerHTML=`
     <div class="name">
       ${m.name} · #${m.id}
-      ${isAdmin?`<span onclick="del(${m.id})" style="color:red;cursor:pointer"> ✖</span>`:""}
+      ${isAdmin?`<span class="del" onclick="del(${m.id})"> ✖</span>`:""}
     </div>
     <div class="text">${m.text}</div>
   `;
@@ -158,6 +99,7 @@ async function load(){
     .select("*")
     .eq("room",room)
     .order("id");
+
   chat.innerHTML="";
   data.forEach(draw);
 }
@@ -167,25 +109,37 @@ async function send(){
   const v=msg.value.trim();
   if(!v) return;
 
-  if(slowMode && Date.now()-lastSend<2000)
-    return alert("Yavaşla");
-
+  if(Date.now()-lastSend<2000) return alert("Yavaşla");
   lastSend=Date.now();
 
-  await sb.from("messages").insert({
+  const {data,error}=await sb.from("messages").insert({
     room,
     name:username,
     text:v
-  });
+  }).select().single();
 
+  if(error){alert(error.message);return;}
+
+  draw(data); // anında göster
   msg.value="";
 }
 
-/* ===== REALTIME ===== */
+/* ===== REALTIME (SADECE DİĞERLERİ) ===== */
 sb.channel("chat")
 .on("postgres_changes",
   {event:"INSERT",schema:"public",table:"messages"},
-  p=>draw(p.new)
+  p=>{
+    if(p.new.room===room && p.new.name!==username){
+      draw(p.new);
+    }
+  }
+)
+.on("postgres_changes",
+  {event:"DELETE",schema:"public",table:"messages"},
+  p=>{
+    const el=document.getElementById("m"+p.old.id);
+    if(el) el.remove();
+  }
 )
 .subscribe();
 
@@ -195,38 +149,25 @@ adminBtn.onclick=()=>{
   if(p==="12345"){
     isAdmin=true;
     adminPanel.style.display="block";
+    load();
   }
 };
 
 async function del(id){
   if(!isAdmin) return;
   await sb.from("messages").delete().eq("id",id);
-  load();
 }
 
 async function clearChat(){
   if(!isAdmin) return;
   await sb.from("messages").delete().neq("id",0);
-  load();
 }
 
-function toggleSlow(){
-  slowMode=!slowMode;
-  alert("Slow mode: "+slowMode);
-}
-
-function toggleAuto(){
-  autoDelete=!autoDelete;
-  alert("Oto silme: "+autoDelete);
-}
-
-/* ===== AUTO DELETE ===== */
+/* ===== AUTO DELETE (10 DK) ===== */
 setInterval(async()=>{
-  if(!autoDelete) return;
-  await sb
-    .from("messages")
+  await sb.from("messages")
     .delete()
-    .lt("created_at", new Date(Date.now()-10*60*1000).toISOString());
+    .lt("created_at",new Date(Date.now()-10*60*1000).toISOString());
 },60000);
 
 /* ===== INIT ===== */

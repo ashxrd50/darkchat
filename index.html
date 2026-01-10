@@ -14,13 +14,11 @@ body{margin:0;background:#050505;color:#9ca3af;font-family:Courier New,monospace
   display:flex;align-items:center;justify-content:space-between;
   padding:0 15px;font-size:13px
 }
-#chat{
-  height:calc(100vh - 110px);
-  overflow-y:auto;padding:10px
-}
+#right{display:flex;gap:15px;align-items:center}
+#chat{height:calc(100vh - 110px);overflow-y:auto;padding:10px}
 .msg{margin-bottom:14px}
 .name{font-size:12px;color:#6b7280}
-.text{font-size:14px;color:#e5e7eb;line-height:1.4}
+.text{font-size:14px;color:#e5e7eb}
 #input{
   height:65px;background:#000;border-top:1px solid #111;
   display:flex;gap:10px;padding:10px
@@ -33,6 +31,26 @@ button{
   background:#111;border:1px solid #333;
   color:#9ca3af;padding:0 16px;cursor:pointer
 }
+
+/* ADMIN */
+#adminBtn{display:flex;gap:6px;align-items:center;cursor:pointer;opacity:.8}
+#adminBtn:hover{opacity:1}
+.admin-avatar{
+  width:26px;height:26px;border:1px solid #333;border-radius:6px;
+  display:flex;align-items:center;justify-content:center;background:#111
+}
+.admin-text{font-size:11px}
+
+/* PANEL */
+#adminPanel{
+  position:fixed;inset:0;background:rgba(0,0,0,.6);
+  display:none;align-items:center;justify-content:center;z-index:999
+}
+.panel-box{
+  background:#000;border:1px solid #222;padding:20px;width:260px;
+  display:flex;flex-direction:column;gap:10px
+}
+.panel-title{text-align:center;font-size:13px;color:#e5e7eb}
 </style>
 </head>
 
@@ -40,7 +58,13 @@ button{
 
 <div id="top">
   <div>anonymous://chat</div>
-  <div id="room">#global</div>
+  <div id="right">
+    <div id="status">connect...</div>
+    <div id="adminBtn">
+      <div class="admin-avatar">A</div>
+      <div class="admin-text">ADMIN</div>
+    </div>
+  </div>
 </div>
 
 <div id="chat"></div>
@@ -50,81 +74,102 @@ button{
   <button onclick="send()">send</button>
 </div>
 
+<!-- ADMIN PANEL -->
+<div id="adminPanel">
+  <div class="panel-box">
+    <div class="panel-title">ADMIN PANEL</div>
+    <button onclick="adminClear()">🧹 Clear Chat</button>
+    <button onclick="roomLocked=true">🔒 Lock Room</button>
+    <button onclick="roomLocked=false">🔓 Unlock Room</button>
+    <input id="muteInput" placeholder="username#123">
+    <button onclick="adminMute()">🔇 Mute</button>
+    <button onclick="adminUnmute()">🔊 Unmute</button>
+    <button onclick="toggleAdminPanel()">✖ Close</button>
+  </div>
+</div>
+
 <script>
 /* 🔑 SUPABASE */
 const SUPABASE_URL = "https://dhwqtanvouvonspqwawm.supabase.co";
 const SUPABASE_KEY = "sb_publishable_pWR0L6kTZHHzzaoD2mCWsw_6BVk2DJY";
 const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-/* 👤 USER */
-const names=["root","ghost","null","cipher","void","proxy"];
-const user = names[Math.random()*names.length|0] + "#" + (Math.random()*900+100|0);
+/* ADMIN */
+const ADMIN_PASSWORD = "1234"; // değiştir
+let isAdmin=false;
+let roomLocked=false;
+const mutedUsers=new Set();
 
-/* 🌍 ROOM */
-const room = location.hash.replace("#","") || "global";
-document.getElementById("room").innerText = "#"+room;
+/* USER */
+const names=["root","ghost","null","cipher","void"];
+const user=names[Math.random()*names.length|0]+"#"+(Math.random()*900+100|0);
+const room=location.hash.replace("#","")||"global";
 
-/* 🚫 KÜFÜR FİLTRESİ */
+/* FILTER */
 const bad=["salak","aptal","küfür"];
-function clean(t){
-  bad.forEach(w=>t=t.replace(new RegExp(w,"gi"),"***"));
-  return t;
-}
+const clean=t=>bad.reduce((a,w)=>a.replace(new RegExp(w,"gi"),"***"),t);
 
-/* 📥 ESKİ MESAJLAR */
-supabase
-  .from("messages")
-  .select("*")
-  .eq("room",room)
-  .order("created_at",{ascending:true})
-  .then(r=>{
-    if(r.data) r.data.forEach(show);
-  });
+/* LOAD */
+supabase.from("messages")
+.select("*").eq("room",room)
+.order("created_at",{ascending:true})
+.then(r=>{if(r.data)r.data.forEach(show);});
 
-/* 📡 REALTIME */
+/* REALTIME */
 supabase.channel("room-"+room)
-  .on("postgres_changes",
-    {event:"INSERT",schema:"public",table:"messages"},
-    payload=>{
-      if(payload.new.room===room)
-        show(payload.new);
-    }
-  ).subscribe();
+.on("postgres_changes",
+  {event:"INSERT",schema:"public",table:"messages"},
+  payload=>{
+    if(payload.new.room===room) show(payload.new);
+    document.getElementById("status").innerText="online";
+  }
+).subscribe(status=>{
+  if(status==="SUBSCRIBED")
+    document.getElementById("status").innerText="online";
+});
 
-/* 🛡️ SPAM */
-let last=0;
-
-/* 📤 SEND */
+/* SEND */
 function send(){
-  const input=message;
-  const now=Date.now();
-  if(!input.value.trim())return;
-  if(now-last<2000)return; // 2 sn flood
-  last=now;
-
-  supabase.from("messages").insert({
-    room:room,
-    name:user,
-    text:clean(input.value)
-  });
-  input.value="";
+  const t=message.value.trim();
+  if(!t)return;
+  if(roomLocked&&!isAdmin)return alert("Room locked");
+  if(mutedUsers.has(user)&&!isAdmin)return alert("Muted");
+  if(t.startsWith("/")&&isAdmin){adminCmd(t);message.value="";return;}
+  supabase.from("messages").insert({room,name:user,text:clean(t)});
+  message.value="";
 }
 
-/* 🖥️ UI */
+/* UI */
 function show(d){
   const m=document.createElement("div");
   m.className="msg";
-  m.innerHTML=`
-    <div class="name">${d.name}</div>
-    <div class="text">${d.text}</div>
-  `;
+  m.innerHTML=`<div class="name">${d.name}</div><div class="text">${d.text}</div>`;
   chat.appendChild(m);
   chat.scrollTop=chat.scrollHeight;
 }
 
-message.addEventListener("keydown",e=>{
-  if(e.key==="Enter")send();
-});
+/* ADMIN */
+adminBtn.onclick=()=>{
+  if(!isAdmin){
+    const p=prompt("Admin password:");
+    if(p===ADMIN_PASSWORD){isAdmin=true;toggleAdminPanel();}
+  }else toggleAdminPanel();
+};
+function toggleAdminPanel(){
+  adminPanel.style.display=
+    adminPanel.style.display==="flex"?"none":"flex";
+}
+function adminClear(){
+  supabase.from("messages").delete().eq("room",room);
+}
+function adminMute(){mutedUsers.add(muteInput.value);}
+function adminUnmute(){mutedUsers.delete(muteInput.value);}
+function adminCmd(c){
+  if(c==="/clear")adminClear();
+}
+
+/* ENTER */
+message.addEventListener("keydown",e=>{if(e.key==="Enter")send();});
 </script>
 
 </body>

@@ -9,10 +9,10 @@
 
 <style>
 body{margin:0;background:#000;color:#ccc;font-family:monospace}
-#top{height:40px;background:#000;border-bottom:1px solid #111;display:flex;justify-content:space-between;align-items:center;padding:0 10px}
+#top{height:40px;border-bottom:1px solid #111;display:flex;justify-content:space-between;align-items:center;padding:0 10px}
 #chat{height:calc(100vh - 100px);overflow-y:auto;padding:10px}
 .msg{margin-bottom:10px}
-.name{color:#666;font-size:12px}
+.name{font-size:12px;color:#666}
 .text{color:#eee}
 #input{height:60px;border-top:1px solid #111;display:flex}
 #input input{flex:1;background:#000;color:#fff;border:none;padding:10px}
@@ -31,66 +31,74 @@ body{margin:0;background:#000;color:#ccc;font-family:monospace}
 
 <div id="input">
   <input id="msg" placeholder="type message..." autocomplete="off">
-  <button onclick="send()">send</button>
+  <button id="sendBtn">send</button>
 </div>
 
 <script>
+/* 🔧 CONFIG */
 const SUPABASE_URL = "https://dhwqtanvouvonspqwawm.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRod3F0YW52b3V2b25zcHF3YXdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwNTk2MDEsImV4cCI6MjA4MzYzNTYwMX0.DHJ9Grc75evWPhNVFmT_xOnEDKK4ssKjW1TWVtPnBKI";
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const supa = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const room = "global";
 const user = "anon#" + Math.floor(Math.random()*999);
 
 const chat = document.getElementById("chat");
 const status = document.getElementById("status");
+const input = document.getElementById("msg");
 
+/* 🧱 UI */
 function show(m){
-  const d=document.createElement("div");
-  d.className="msg";
-  d.innerHTML=`<div class="name">${m.name}</div><div class="text">${m.text}</div>`;
+  const d = document.createElement("div");
+  d.className = "msg";
+  d.innerHTML = `<div class="name">${m.name}</div><div class="text">${m.text}</div>`;
   chat.appendChild(d);
-  chat.scrollTop=chat.scrollHeight;
+  chat.scrollTop = chat.scrollHeight;
 }
 
-// 🔄 ESKİ MESAJLARI ÇEK
-sb.from("messages")
+/* 📥 LOAD OLD MESSAGES */
+supa.from("messages")
   .select("*")
-  .eq("room",room)
-  .order("created_at",{ascending:true})
-  .then(r=>{
-    if(r.error){console.error(r.error);return;}
+  .eq("room", room)
+  .order("created_at", { ascending: true })
+  .then(r => {
+    if (r.error) {
+      alert("SELECT ERROR: " + r.error.message);
+      return;
+    }
     r.data.forEach(show);
-    status.innerText="connected";
+    status.innerText = "connected";
   });
 
-// ⚡ REALTIME
-sb.channel("room-"+room)
-  .on("postgres_changes",
-    {event:"INSERT",schema:"public",table:"messages",filter:`room=eq.${room}`},
-    p=>show(p.new)
+/* ⚡ REALTIME */
+supa.channel("room-global")
+  .on(
+    "postgres_changes",
+    { event: "INSERT", schema: "public", table: "messages" },
+    payload => show(payload.new)
   )
   .subscribe();
 
-// 📤 GÖNDER
+/* 📤 SEND */
 function send(){
-  const i=document.getElementById("msg");
-  if(!i.value.trim())return;
+  if(!input.value.trim()) return;
 
-  sb.from("messages").insert({
-    room:room,
-    name:user,
-    text:i.value
+  supa.from("messages").insert({
+    room: room,
+    name: user,
+    text: input.value
+  }).then(r=>{
+    if(r.error){
+      alert("INSERT ERROR: " + r.error.message);
+    }
   });
 
-  i.value="";
+  input.value = "";
 }
 
-// ENTER
-document.getElementById("msg").addEventListener("keydown",e=>{
-  if(e.key==="Enter")send();
-});
+document.getElementById("sendBtn").onclick = send;
+input.addEventListener("keydown", e => { if(e.key==="Enter") send(); });
 </script>
 
 </body>

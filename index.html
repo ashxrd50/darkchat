@@ -36,7 +36,8 @@ button{background:#111;border:1px solid #333;color:#9ca3af;padding:0 15px;cursor
 <script>
 /* ===== SUPABASE ===== */
 const SUPABASE_URL = "https://dhwqtanvouvonspqwawm.supabase.co";
-const SUPABASE_KEY = "ANON_KEY_BURADA";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRod3F0YW52b3V2b25zcHF3YXdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwNTk2MDEsImV4cCI6MjA4MzYzNTYwMX0.DHJ9Grc75evWPhNVFmT_xOnEDKK4ssKjW1TWVtPnBKI";
+
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 /* ===== USER ===== */
@@ -68,6 +69,7 @@ async function load(){
 
   if(error){
     alert(error.message);
+    console.error(error);
     return;
   }
 

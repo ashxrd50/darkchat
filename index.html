@@ -3,131 +3,35 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Anonymous Chat</title>
+<title>anonymous://chat</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
-* { box-sizing: border-box; }
-
-body {
-  margin: 0;
-  background: #050505;
-  color: #9ca3af;
-  font-family: "Courier New", monospace;
-  overflow: hidden;
+*{box-sizing:border-box}
+body{margin:0;background:#050505;color:#9ca3af;font-family:Courier New,monospace}
+#top{
+  height:45px;background:#000;border-bottom:1px solid #111;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 15px;font-size:13px
 }
-
-/* HEADER */
-#top {
-  position: fixed;
-  top: 0;
-  width: 100%;
-  height: 45px;
-  background: #000;
-  border-bottom: 1px solid #111;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 15px;
-  font-size: 13px;
+#chat{
+  height:calc(100vh - 110px);
+  overflow-y:auto;padding:10px
 }
-
-#online {
-  color: #6b7280;
+.msg{margin-bottom:14px}
+.name{font-size:12px;color:#6b7280}
+.text{font-size:14px;color:#e5e7eb;line-height:1.4}
+#input{
+  height:65px;background:#000;border-top:1px solid #111;
+  display:flex;gap:10px;padding:10px
 }
-
-/* CHAT AREA */
-#chat {
-  position: fixed;
-  top: 45px;
-  bottom: 65px;
-  width: 100%;
-  padding: 10px;
-  overflow-y: auto;
+input{
+  flex:1;background:#050505;border:1px solid #222;
+  color:#fff;padding:10px;font-family:inherit
 }
-
-/* MESSAGE */
-.msg {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 14px;
-  animation: fadeIn 0.3s ease;
-}
-
-.avatar {
-  width: 36px;
-  height: 36px;
-  background: linear-gradient(145deg, #111, #000);
-  border: 1px solid #222;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #6b7280;
-  font-size: 14px;
-}
-
-.content {
-  max-width: 80%;
-}
-
-.name {
-  font-size: 12px;
-  color: #6b7280;
-}
-
-.text {
-  font-size: 14px;
-  color: #d1d5db;
-  line-height: 1.4;
-  word-wrap: break-word;
-}
-
-/* INPUT */
-#inputBox {
-  position: fixed;
-  bottom: 0;
-  width: 100%;
-  height: 65px;
-  background: #000;
-  border-top: 1px solid #111;
-  display: flex;
-  padding: 10px;
-  gap: 10px;
-}
-
-#message {
-  flex: 1;
-  background: #050505;
-  border: 1px solid #222;
-  color: #e5e7eb;
-  padding: 10px;
-  font-family: inherit;
-  font-size: 14px;
-  outline: none;
-}
-
-button {
-  background: #111;
-  border: 1px solid #333;
-  color: #9ca3af;
-  padding: 0 16px;
-  font-family: inherit;
-  cursor: pointer;
-}
-
-button:hover {
-  background: #1a1a1a;
-}
-
-/* ANIM */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(5px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* MOBILE */
-@media (max-width: 600px) {
-  .content { max-width: 70%; }
+button{
+  background:#111;border:1px solid #333;
+  color:#9ca3af;padding:0 16px;cursor:pointer
 }
 </style>
 </head>
@@ -136,78 +40,91 @@ button:hover {
 
 <div id="top">
   <div>anonymous://chat</div>
-  <div id="online">online: 1</div>
+  <div id="room">#global</div>
 </div>
 
 <div id="chat"></div>
 
-<div id="inputBox">
+<div id="input">
   <input id="message" placeholder="type message..." autocomplete="off">
   <button onclick="send()">send</button>
 </div>
 
 <script>
-// 🔐 Rastgele hacker nick
-const names = ["root","ghost","null","cipher","shadow","zero","proxy","void"];
-const user =
-  names[Math.floor(Math.random()*names.length)] +
-  "#" + Math.floor(Math.random()*900 + 100);
+/* 🔑 SUPABASE */
+const SUPABASE_URL = "https://dhwqtanvouvonspqwawm.supabase.co";
+const SUPABASE_KEY = "sb_publishable_pWR0L6kTZHHzzaoD2mCWsw_6BVk2DJY";
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// 👁️ Online (simülasyon – backend gelince gerçek olur)
-let online = Math.floor(Math.random()*6)+3;
-document.getElementById("online").innerText = "online: " + online;
+/* 👤 USER */
+const names=["root","ghost","null","cipher","void","proxy"];
+const user = names[Math.random()*names.length|0] + "#" + (Math.random()*900+100|0);
 
-// 🚫 Küfür filtresi (basic)
-const badWords = ["salak","aptal","küfür"];
+/* 🌍 ROOM */
+const room = location.hash.replace("#","") || "global";
+document.getElementById("room").innerText = "#"+room;
+
+/* 🚫 KÜFÜR FİLTRESİ */
+const bad=["salak","aptal","küfür"];
 function clean(t){
-  badWords.forEach(w=>{
-    t = t.replace(new RegExp(w,"gi"), "***");
-  });
+  bad.forEach(w=>t=t.replace(new RegExp(w,"gi"),"***"));
   return t;
 }
 
-// 💬 Mesaj ekle
-function addMessage(name, text) {
-  const msg = document.createElement("div");
-  msg.className = "msg";
-
-  msg.innerHTML = `
-    <div class="avatar">☠</div>
-    <div class="content">
-      <div class="name">${name}</div>
-      <div class="text">${text}</div>
-    </div>
-  `;
-
-  document.getElementById("chat").appendChild(msg);
-  document.getElementById("chat").scrollTop =
-    document.getElementById("chat").scrollHeight;
-}
-
-// 📤 Gönder
-function send() {
-  const input = document.getElementById("message");
-  if (!input.value.trim()) return;
-
-  addMessage(user, clean(input.value));
-  input.value = "";
-}
-
-// Enter ile gönder
-document.getElementById("message")
-  .addEventListener("keydown", e => {
-    if (e.key === "Enter") send();
+/* 📥 ESKİ MESAJLAR */
+supabase
+  .from("messages")
+  .select("*")
+  .eq("room",room)
+  .order("created_at",{ascending:true})
+  .then(r=>{
+    if(r.data) r.data.forEach(show);
   });
 
-// 🤖 Fake trafik (boş durmasın diye – istersen kaldır)
-setInterval(()=>{
-  if (Math.random() > 0.7) {
-    addMessage(
-      names[Math.floor(Math.random()*names.length)] + "#" + Math.floor(Math.random()*999),
-      "connected..."
-    );
-  }
-}, 8000);
+/* 📡 REALTIME */
+supabase.channel("room-"+room)
+  .on("postgres_changes",
+    {event:"INSERT",schema:"public",table:"messages"},
+    payload=>{
+      if(payload.new.room===room)
+        show(payload.new);
+    }
+  ).subscribe();
+
+/* 🛡️ SPAM */
+let last=0;
+
+/* 📤 SEND */
+function send(){
+  const input=message;
+  const now=Date.now();
+  if(!input.value.trim())return;
+  if(now-last<2000)return; // 2 sn flood
+  last=now;
+
+  supabase.from("messages").insert({
+    room:room,
+    name:user,
+    text:clean(input.value)
+  });
+  input.value="";
+}
+
+/* 🖥️ UI */
+function show(d){
+  const m=document.createElement("div");
+  m.className="msg";
+  m.innerHTML=`
+    <div class="name">${d.name}</div>
+    <div class="text">${d.text}</div>
+  `;
+  chat.appendChild(m);
+  chat.scrollTop=chat.scrollHeight;
+}
+
+message.addEventListener("keydown",e=>{
+  if(e.key==="Enter")send();
+});
 </script>
 
 </body>

@@ -31,8 +31,6 @@ button{
   background:#111;border:1px solid #333;
   color:#9ca3af;padding:0 16px;cursor:pointer
 }
-
-/* ADMIN */
 #adminBtn{display:flex;gap:6px;align-items:center;cursor:pointer;opacity:.8}
 #adminBtn:hover{opacity:1}
 .admin-avatar{
@@ -41,7 +39,7 @@ button{
 }
 .admin-text{font-size:11px}
 
-/* PANEL */
+/* ADMIN PANEL */
 #adminPanel{
   position:fixed;inset:0;background:rgba(0,0,0,.6);
   display:none;align-items:center;justify-content:center;z-index:999
@@ -92,7 +90,7 @@ button{
 /* 🔑 SUPABASE */
 const SUPABASE_URL = "https://dhwqtanvouvonspqwawm.supabase.co";
 const SUPABASE_KEY = "sb_publishable_pWR0L6kTZHHzzaoD2mCWsw_6BVk2DJY";
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 /* ADMIN */
 const ADMIN_PASSWORD = "1234"; // değiştir
@@ -109,14 +107,14 @@ const room=location.hash.replace("#","")||"global";
 const bad=["salak","aptal","küfür"];
 const clean=t=>bad.reduce((a,w)=>a.replace(new RegExp(w,"gi"),"***"),t);
 
-/* LOAD */
-supabase.from("messages")
+/* LOAD OLD */
+sb.from("messages")
 .select("*").eq("room",room)
 .order("created_at",{ascending:true})
 .then(r=>{if(r.data)r.data.forEach(show);});
 
 /* REALTIME */
-supabase.channel("room-"+room)
+sb.channel("room-"+room)
 .on("postgres_changes",
   {event:"INSERT",schema:"public",table:"messages"},
   payload=>{
@@ -135,7 +133,7 @@ function send(){
   if(roomLocked&&!isAdmin)return alert("Room locked");
   if(mutedUsers.has(user)&&!isAdmin)return alert("Muted");
   if(t.startsWith("/")&&isAdmin){adminCmd(t);message.value="";return;}
-  supabase.from("messages").insert({room,name:user,text:clean(t)});
+  sb.from("messages").insert({room,name:user,text:clean(t)});
   message.value="";
 }
 
@@ -153,6 +151,7 @@ adminBtn.onclick=()=>{
   if(!isAdmin){
     const p=prompt("Admin password:");
     if(p===ADMIN_PASSWORD){isAdmin=true;toggleAdminPanel();}
+    else alert("Wrong password");
   }else toggleAdminPanel();
 };
 function toggleAdminPanel(){
@@ -160,7 +159,7 @@ function toggleAdminPanel(){
     adminPanel.style.display==="flex"?"none":"flex";
 }
 function adminClear(){
-  supabase.from("messages").delete().eq("room",room);
+  sb.from("messages").delete().eq("room",room);
 }
 function adminMute(){mutedUsers.add(muteInput.value);}
 function adminUnmute(){mutedUsers.delete(muteInput.value);}

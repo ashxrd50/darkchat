@@ -4,39 +4,21 @@
 <meta charset="UTF-8">
 <title>anonymous://chat</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
-:root{
-  --bg:#050505;
-  --panel:#0b0b0b;
-  --border:#1f1f1f;
-  --text:#e5e7eb;
-  --muted:#6b7280;
-  --danger:#ef4444;
-}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font-family:monospace}
-#top{
-  height:50px;background:#000;border-bottom:1px solid var(--border);
-  display:flex;justify-content:space-between;align-items:center;padding:0 15px
-}
-#chat{height:calc(100vh - 120px);overflow:auto;padding:15px}
-.msg{margin-bottom:12px}
-.name{font-size:11px;color:var(--muted)}
-.text{padding:6px 8px;background:var(--panel);border:1px solid var(--border);border-radius:4px}
-#input{
-  height:70px;display:flex;gap:10px;padding:10px;border-top:1px solid var(--border)
-}
-input{flex:1;background:#000;border:1px solid var(--border);color:var(--text);padding:10px}
-button{background:#000;border:1px solid var(--border);color:var(--text);padding:0 14px;cursor:pointer}
+body{margin:0;background:#050505;color:#e5e7eb;font-family:monospace}
+#top{height:48px;background:#000;border-bottom:1px solid #222;
+display:flex;align-items:center;justify-content:space-between;padding:0 15px}
+#chat{height:calc(100vh - 118px);overflow:auto;padding:15px}
+.msg{margin-bottom:10px}
+.name{font-size:11px;color:#6b7280}
+.text{background:#0b0b0b;border:1px solid #222;padding:6px 8px;border-radius:4px}
+#input{height:70px;display:flex;gap:10px;padding:10px;border-top:1px solid #222}
+input{flex:1;background:#000;border:1px solid #222;color:#fff;padding:10px}
+button{background:#000;border:1px solid #222;color:#fff;padding:0 14px;cursor:pointer}
 button:hover{background:#111}
-#adminPanel{
-  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
-  background:#000;border:1px solid var(--border);padding:20px;display:none;width:260px
-}
-.admin-btn{width:100%;margin-bottom:8px}
-.del{color:var(--danger);cursor:pointer}
 </style>
 </head>
 
@@ -44,7 +26,6 @@ button:hover{background:#111}
 
 <div id="top">
   <div>anonymous://chat</div>
-  <div id="adminBtn" style="cursor:pointer">⚙️</div>
 </div>
 
 <div id="chat"></div>
@@ -54,121 +35,91 @@ button:hover{background:#111}
   <button onclick="send()">send</button>
 </div>
 
-<div id="adminPanel">
-  <h3>ADMIN</h3>
-  <button class="admin-btn" onclick="clearChat()">🧹 Tüm mesajları sil</button>
-  <button class="admin-btn" onclick="adminPanel.style.display='none'">Kapat</button>
-</div>
-
 <script>
-/* ===== SUPABASE ===== */
-const sb = supabase.createClient(
-  "https://dhwqtanvouvonspqwawm.supabase.co",
-  "ANON_KEY"
-);
+/* ===== SUPABASE (KONTROL EDİLDİ) ===== */
+const SUPABASE_URL = "https://dhwqtanvouvonspqwawm.supabase.co";
+const SUPABASE_KEY =
+"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRod3F0YW52b3V2b25zcHF3YXdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwNTk2MDEsImV4cCI6MjA4MzYzNTYwMX0.DHJ9Grc75evWPhNVFmT_xOnEDKK4ssKjW1TWVtPnBKI";
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 /* ===== USER ===== */
 const names=["root","ghost","null","cipher","shadow","void"];
-const username=names[Math.floor(Math.random()*names.length)]+"#"+Math.floor(Math.random()*900+100);
-const room="global";
-
-/* ===== STATE ===== */
-let lastSend=0;
-let isAdmin=false;
+const username = names[Math.floor(Math.random()*names.length)]+"#"+Math.floor(Math.random()*900+100);
+const room = "global";
 
 /* ===== DRAW ===== */
 function draw(m){
   const d=document.createElement("div");
   d.className="msg";
-  d.id="m"+m.id;
   d.innerHTML=`
-    <div class="name">
-      ${m.name} · #${m.id}
-      ${isAdmin?`<span class="del" onclick="del(${m.id})"> ✖</span>`:""}
-    </div>
+    <div class="name">${m.name}</div>
     <div class="text">${m.text}</div>
   `;
   chat.appendChild(d);
-  chat.scrollTop=chat.scrollHeight;
+  chat.scrollTop = chat.scrollHeight;
 }
 
 /* ===== LOAD ===== */
 async function load(){
-  const {data}=await sb
+  const {data,error} = await sb
     .from("messages")
-    .select("*")
+    .select("id,name,text")
     .eq("room",room)
     .order("id");
+
+  if(error){
+    alert(error.message);
+    return;
+  }
 
   chat.innerHTML="";
   data.forEach(draw);
 }
 
 /* ===== SEND ===== */
+let lastSend=0;
 async function send(){
-  const v=msg.value.trim();
+  const v = msg.value.trim();
   if(!v) return;
 
-  if(Date.now()-lastSend<2000) return alert("Yavaşla");
-  lastSend=Date.now();
+  if(Date.now()-lastSend < 1500){
+    alert("Yavaş yaz");
+    return;
+  }
+  lastSend = Date.now();
 
-  const {data,error}=await sb.from("messages").insert({
-    room,
-    name:username,
-    text:v
-  }).select().single();
+  const {data,error} = await sb
+    .from("messages")
+    .insert({
+      room: room,
+      name: username,
+      text: v
+    })
+    .select()
+    .single();
 
-  if(error){alert(error.message);return;}
+  if(error){
+    alert(error.message);
+    return;
+  }
 
   draw(data); // anında göster
   msg.value="";
 }
 
-/* ===== REALTIME (SADECE DİĞERLERİ) ===== */
+/* ===== REALTIME ===== */
 sb.channel("chat")
-.on("postgres_changes",
-  {event:"INSERT",schema:"public",table:"messages"},
-  p=>{
-    if(p.new.room===room && p.new.name!==username){
-      draw(p.new);
+  .on(
+    "postgres_changes",
+    {event:"INSERT",schema:"public",table:"messages"},
+    p=>{
+      if(p.new.room===room && p.new.name!==username){
+        draw(p.new);
+      }
     }
-  }
-)
-.on("postgres_changes",
-  {event:"DELETE",schema:"public",table:"messages"},
-  p=>{
-    const el=document.getElementById("m"+p.old.id);
-    if(el) el.remove();
-  }
-)
-.subscribe();
-
-/* ===== ADMIN ===== */
-adminBtn.onclick=()=>{
-  const p=prompt("Admin şifre:");
-  if(p==="12345"){
-    isAdmin=true;
-    adminPanel.style.display="block";
-    load();
-  }
-};
-
-async function del(id){
-  if(!isAdmin) return;
-  await sb.from("messages").delete().eq("id",id);
-}
-
-async function clearChat(){
-  if(!isAdmin) return;
-  await sb.from("messages").delete().neq("id",0);
-}
-
-/* ===== AUTO DELETE (10 DK) ===== */
-setInterval(async()=>{
-  await sb.from("messages")
-    .delete()
-    .lt("created_at",new Date(Date.now()-10*60*1000).toISOString());
-},60000);
+  )
+  .subscribe();
 
 /* ===== INIT ===== */
 load();

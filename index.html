@@ -2,153 +2,88 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>anonymous://chat</title>
+<title>Anon Chat</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
-body{margin:0;background:#050505;color:#e5e7eb;font-family:monospace}
-#top{height:48px;background:#000;border-bottom:1px solid #222;
-display:flex;align-items:center;justify-content:space-between;padding:0 15px}
-#chat{height:calc(100vh - 130px);overflow:auto;padding:15px}
-.msg{margin-bottom:10px}
-.name{font-size:11px;color:#6b7280}
-.text{background:#0b0b0b;border:1px solid #222;padding:6px 8px;border-radius:4px}
-.adminBtns button{margin-left:5px;font-size:11px}
-#input{height:82px;display:flex;gap:10px;padding:10px;border-top:1px solid #222}
-input{flex:1;background:#000;border:1px solid #222;color:#fff;padding:10px}
-button{background:#000;border:1px solid #333;color:#fff;padding:0 14px;cursor:pointer}
-button:hover{background:#111}
-#panel{position:fixed;top:60px;right:15px;background:#000;border:1px solid #333;
-padding:10px;display:none}
+body{margin:0;background:#0a0a0a;color:#fff;font-family:monospace}
+#chat{height:calc(100vh - 70px);overflow:auto;padding:10px}
+.msg{margin-bottom:8px}
+.name{color:#888;font-size:12px}
+#input{height:70px;display:flex;gap:10px;padding:10px;border-top:1px solid #222}
+input{flex:1;background:#000;border:1px solid #333;color:#fff;padding:10px}
+button{background:#111;border:1px solid #333;color:#fff;padding:0 15px}
 </style>
 </head>
 
 <body>
 
-<div id="top">
-  <div>anonymous://chat</div>
-  <button onclick="adminLogin()">ADMIN</button>
-</div>
-
 <div id="chat"></div>
 
 <div id="input">
   <input id="msg" placeholder="mesaj yaz">
-  <button onclick="send()">send</button>
-</div>
-
-<div id="panel">
-  <b>ADMIN PANEL</b><br><br>
-  <button onclick="clearChat()">Chat Temizle</button>
+  <button onclick="send()">Gönder</button>
 </div>
 
 <script>
-/* ===== SUPABASE ===== */
-const SUPABASE_URL="https://dhwqtanvouvonspqwawm.supabase.co";
-const SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRod3F0YW52b3V2b25zcHF3YXdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwNTk2MDEsImV4cCI6MjA4MzYzNTYwMX0.DHJ9Grc75evWPhNVFmT_xOnEDKK4ssKjW1TWVtPnBKI";
-const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+/* ==== SUPABASE ==== */
+const SUPABASE_URL = "https://dhwqtanvouvonspqwawm.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRod3F0YW52b3V2b25zcHF3YXdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwNTk2MDEsImV4cCI6MjA4MzYzNTYwMX0.DHJ9Grc75evWPhNVFmT_xOnEDKK4ssKjW1TWVtPnBKI";
 
-/* ===== STATE ===== */
-const room="global";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+/* ==== USER ==== */
 const names=["root","ghost","null","cipher","shadow","void"];
-const username=names[Math.floor(Math.random()*names.length)]+"#"+Math.floor(Math.random()*900+100);
-let isAdmin=false;
-let lastSend=0;
-let bannedUsers=JSON.parse(localStorage.getItem("bans")||"[]");
+const username = names[Math.floor(Math.random()*names.length)]+"#"+Math.floor(Math.random()*900+100);
 
-/* ===== DRAW ===== */
-function draw(m){
-  if(bannedUsers.includes(m.username)) return;
-
+/* ==== DRAW ==== */
+function draw(u,t){
   const d=document.createElement("div");
   d.className="msg";
-  d.innerHTML=`
-    <div class="name">${m.username}</div>
-    <div class="text">${m.text}</div>
-    ${isAdmin?`
-    <div class="adminBtns">
-      <button onclick="del(${m.id})">sil</button>
-      <button onclick="ban('${m.username}')">ban</button>
-    </div>`:""}
-  `;
+  d.innerHTML=`<div class="name">${u}</div><div>${t}</div>`;
   chat.appendChild(d);
   chat.scrollTop=chat.scrollHeight;
 }
 
-/* ===== LOAD ===== */
+/* ==== LOAD ==== */
 async function load(){
-  const {data}=await sb.from("messages")
-    .select("*")
-    .eq("room",room)
+  const {data,error} = await sb
+    .from("messages")
+    .select("username,text")
     .order("id");
+
+  if(error){alert(error.message);return;}
+
   chat.innerHTML="";
-  data.forEach(draw);
+  data.forEach(m=>draw(m.username,m.text));
 }
 
-/* ===== SEND (SPAM KORUMA) ===== */
+/* ==== SEND ==== */
 async function send(){
   const v=msg.value.trim();
   if(!v) return;
 
-  if(bannedUsers.includes(username)){
-    alert("Banlısın");
-    return;
-  }
-
-  if(Date.now()-lastSend<2000){
-    alert("Yavaş yaz");
-    return;
-  }
-  lastSend=Date.now();
-
-  const {data,error}=await sb.from("messages")
-    .insert({room,username,text:v})
-    .select()
-    .single();
+  const {error} = await sb
+    .from("messages")
+    .insert({username:username,text:v});
 
   if(error){alert(error.message);return;}
-  draw(data);
+
   msg.value="";
 }
 
-/* ===== ADMIN ===== */
-function adminLogin(){
-  const p=prompt("Admin şifre:");
-  if(p==="12345"){
-    isAdmin=true;
-    panel.style.display="block";
-    load();
-  }
-}
-
-async function del(id){
-  await sb.from("messages").delete().eq("id",id);
-  load();
-}
-
-function ban(u){
-  if(!bannedUsers.includes(u)){
-    bannedUsers.push(u);
-    localStorage.setItem("bans",JSON.stringify(bannedUsers));
-    load();
-  }
-}
-
-async function clearChat(){
-  await sb.from("messages").delete().neq("id",0);
-  load();
-}
-
-/* ===== REALTIME ===== */
+/* ==== REALTIME ==== */
 sb.channel("chat")
 .on("postgres_changes",
 {event:"INSERT",schema:"public",table:"messages"},
-p=>{ if(p.new.room===room) draw(p.new); }
+p=>draw(p.new.username,p.new.text)
 )
 .subscribe();
 
 load();
 </script>
+
 </body>
 </html>

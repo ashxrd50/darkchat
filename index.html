@@ -15,7 +15,7 @@ body{margin:0;background:#050505;color:#fff;font-family:monospace}
 .name{color:#6b7280;font-size:12px}
 #input{height:65px;display:flex;gap:10px;padding:10px;border-top:1px solid #111}
 input{flex:1;background:#000;border:1px solid #222;color:#fff;padding:10px}
-button{background:#111;border:1px solid #333;color:#9ca3af;padding:0 15px}
+button{background:#111;border:1px solid #333;color:#9ca3af;padding:0 15px;cursor:pointer}
 </style>
 </head>
 
@@ -29,19 +29,27 @@ button{background:#111;border:1px solid #333;color:#9ca3af;padding:0 15px}
 <div id="chat"></div>
 
 <div id="input">
-  <input id="msg" placeholder="mesaj yaz">
+  <input id="msg" placeholder="mesaj yaz" autocomplete="off">
   <button onclick="send()">send</button>
 </div>
 
 <script>
+/* ===== SUPABASE ===== */
 const SUPABASE_URL = "https://dhwqtanvouvonspqwawm.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRod3F0YW52b3V2b25zcHF3YXdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgwNTk2MDEsImV4cCI6MjA4MzYzNTYwMX0.DHJ9Grc75evWPhNVFmT_xOnEDKK4ssKjW1TWVtPnBKI";
-
+const SUPABASE_KEY = "ANON_KEY_BURADA";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+/* ===== USER ===== */
 const names=["root","ghost","null","cipher","shadow","void"];
-const username = names[Math.floor(Math.random()*names.length)]+"#"+Math.floor(Math.random()*900+100);
+const username =
+  names[Math.floor(Math.random()*names.length)] +
+  "#" +
+  Math.floor(Math.random()*900+100);
 
+const room = "global";
+const chat = document.getElementById("chat");
+
+/* ===== DRAW ===== */
 function draw(u,t){
   const d=document.createElement("div");
   d.className="msg";
@@ -50,36 +58,62 @@ function draw(u,t){
   chat.scrollTop=chat.scrollHeight;
 }
 
+/* ===== LOAD ===== */
 async function load(){
-  const {data}=await sb.from("messages").select("*").order("id");
+  const { data, error } = await sb
+    .from("messages")
+    .select("*")
+    .eq("room", room)
+    .order("id");
+
+  if(error){
+    alert(error.message);
+    return;
+  }
+
   chat.innerHTML="";
-  data.forEach(m=>draw(m.username,m.text));
+  data.forEach(m => draw(m.name, m.text));
 }
 
+/* ===== SEND ===== */
 async function send(){
   const i=document.getElementById("msg");
   if(!i.value.trim()) return;
 
-  await sb.from("messages").insert({
-    username: username,
+  const { error } = await sb.from("messages").insert({
+    room: room,
+    name: username,
     text: i.value
   });
+
+  if(error){
+    alert(error.message);
+    console.error(error);
+  }
 
   i.value="";
 }
 
+/* ===== REALTIME ===== */
 sb.channel("chat")
-  .on("postgres_changes",
-    {event:"INSERT",schema:"public",table:"messages"},
-    p=>draw(p.new.username,p.new.text)
+  .on(
+    "postgres_changes",
+    { event:"INSERT", schema:"public", table:"messages" },
+    payload => {
+      if(payload.new.room === room){
+        draw(payload.new.name, payload.new.text);
+      }
+    }
   )
   .subscribe();
 
-admin.onclick=()=>{
-  const p=prompt("Admin şifre:");
-  if(p==="12345") alert("Admin giriş başarılı");
+/* ===== ADMIN ===== */
+admin.onclick = () => {
+  const p = prompt("Admin şifre:");
+  if(p === "12345") alert("Admin giriş başarılı");
 };
 
+/* ===== INIT ===== */
 load();
 </script>
 
